@@ -6,7 +6,7 @@ from config import CORS_ORIGINS
 from routers import auth_router, analysis_router, operator_router, government_router, admin_router, demo_router
 from services.auth import verify_token
 
-app = FastAPI(title="VoiceShield API", version="1.0.0")
+app = FastAPI(title="VoxVault API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,

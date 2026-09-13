@@ -14,7 +14,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 @router.get("/config")
 def get_config():
     return {
-        "appName": "VoiceShield",
+        "appName": "VoxVault",
         "version": "1.0.0",
         "maxFileSize": 25 * 1024 * 1024,
         "supportedFormats": ["audio/wav", "audio/mp3", "audio/flac", "audio/ogg", "audio/webm"],
