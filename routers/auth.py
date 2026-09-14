@@ -17,9 +17,9 @@ def user_to_response(user: User) -> UserResponse:
         name=user.name,
         role=user.role,
         organization=user.organization,
-        created_at=user.created_at.isoformat() if user.created_at else "",
-        last_login=user.last_login.isoformat() if user.last_login else "",
-        consent_given=user.consent_given,
+        createdAt=user.created_at.isoformat() if user.created_at else "",
+        lastLogin=user.last_login.isoformat() if user.last_login else "",
+        consentGiven=user.consent_given,
         preferences={"notifications": True, "emailAlerts": False}
     )
 

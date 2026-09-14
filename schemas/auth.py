@@ -21,9 +21,9 @@ class UserResponse(BaseModel):
     name: str
     role: str
     organization: Optional[str] = None
-    created_at: str
-    last_login: str
-    consent_given: bool
+    createdAt: str
+    lastLogin: str
+    consentGiven: bool
     preferences: dict = {"notifications": True, "emailAlerts": False}
 
 
