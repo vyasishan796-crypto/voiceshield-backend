@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, case
 from database import get_db
 from models.analysis import Analysis
 from models.call import Call
@@ -67,7 +67,8 @@ def get_suspicious_numbers(db: Session = Depends(get_db)):
         db.query(
             A.caller_number,
             func.count(A.id).label("totalAnalyses"),
-            func.sum(func.cast(A.risk_level == "HIGH", A.risk_level.like("HIGH"))).label("highRiskCount")
+            func.sum(case((A.risk_level == "HIGH", 1), else_=0)).label("highRiskCount"),
+            func.sum(case((A.risk_level == "MEDIUM", 1), else_=0)).label("mediumRiskCount")
         )
         .filter(A.caller_number.isnot(None), A.caller_number != "")
         .group_by(A.caller_number)
@@ -80,11 +81,11 @@ def get_suspicious_numbers(db: Session = Depends(get_db)):
             numbers.append({
                 "phoneNumber": r[0],
                 "totalAnalyses": r[1],
-                "highRiskCount": 0,
-                "mediumRiskCount": 0,
+                "highRiskCount": r[2] or 0,
+                "mediumRiskCount": r[3] or 0,
                 "firstSeen": "2026-09-01T00:00:00",
                 "lastSeen": "2026-09-10T00:00:00",
-                "flagged": False,
+                "flagged": (r[2] or 0) > 2,
                 "reports": []
             })
     return numbers

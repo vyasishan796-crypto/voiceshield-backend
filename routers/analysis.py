@@ -87,29 +87,14 @@ async def upload_audio(
             "createdAt": analysis.created_at.isoformat() if analysis.created_at else ""
         }
     except Exception as e:
-        return {"error": str(e), "id": str(uuid.uuid4()), "sessionId": "session_err", "source": "upload", "status": "completed", "riskScore": 50, "riskLevel": "MEDIUM", "createdAt": datetime.now(timezone.utc).isoformat()}
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 
 @router.get("/{analysis_id}")
 def get_result(analysis_id: str, db: Session = Depends(get_db)):
     analysis = db.query(Analysis).filter(Analysis.id == analysis_id).first()
     if not analysis:
-        random_risk = __import__('random').randint(10, 90)
-        random_level = "LOW" if random_risk <= 30 else "MEDIUM" if random_risk <= 70 else "HIGH"
-        return DetectionResult(
-            analysisId=analysis_id,
-            sessionId=f"session_{analysis_id}",
-            modelVersion="AASIST v2.1",
-            riskScore=random_risk,
-            riskLevel=random_level,
-            confidence=0.92,
-            deepfakeConfidence=round(random_risk / 100, 3),
-            explanation="Voice analysis completed. Results processed by ML pipeline.",
-            indicators=[],
-            recommendedAction="Analysis complete." if random_level == "LOW" else "Verify caller identity.",
-            processingTimeMs=250,
-            temporalSmoothing={"enabled": True, "windowSize": 3, "overlapPercent": 50}
-        )
+        raise HTTPException(status_code=404, detail="Analysis not found")
 
     indicators = json.loads(analysis.indicators_json) if analysis.indicators_json else []
 

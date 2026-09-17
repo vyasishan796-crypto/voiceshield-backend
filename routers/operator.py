@@ -145,3 +145,21 @@ def block_call(call_id: str, payload: BlockPayload, db: Session = Depends(get_db
 
     db.commit()
     return {"success": True, "message": "Caller blocked"}
+
+
+@router.post("/calls/{call_id}/notes")
+def add_call_note(call_id: str, body: dict, db: Session = Depends(get_db)):
+    call = db.query(Call).filter(Call.id == call_id).first()
+    if not call:
+        raise HTTPException(status_code=404, detail="Call not found")
+
+    notes = json.loads(call.notes_json) if call.notes_json else []
+    notes.append({
+        "id": str(len(notes) + 1),
+        "content": body.get("content", ""),
+        "createdAt": datetime.now(timezone.utc).isoformat(),
+        "author": body.get("author", "Operator")
+    })
+    call.notes_json = json.dumps(notes)
+    db.commit()
+    return {"success": True, "message": "Note added"}

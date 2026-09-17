@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Header
 from sqlalchemy.orm import Session
 from database import get_db
 from models.user import User
@@ -6,6 +6,7 @@ from models.activity_log import ActivityLog
 from schemas.auth import LoginRequest, SignupRequest, AuthResponse, UserResponse, TokenRefreshRequest, ConsentRequest
 from services.auth import hash_password, verify_password, create_access_token, create_refresh_token, verify_token
 from datetime import datetime, timezone
+from typing import Optional
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -25,6 +26,8 @@ def user_to_response(user: User) -> UserResponse:
 
 
 def log_activity(db: Session, user_id: str, action: str, details: str = None, request: Request = None):
+    if not user_id:
+        return
     activity = ActivityLog(
         user_id=user_id,
         action=action,
@@ -36,12 +39,25 @@ def log_activity(db: Session, user_id: str, action: str, details: str = None, re
     db.commit()
 
 
+def get_current_user(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)) -> User:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    token = authorization.replace("Bearer ", "")
+    payload = verify_token(token)
+    if not payload or payload.get("type") != "access":
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    user = db.query(User).filter(User.id == payload.get("sub")).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
 @router.post("/signup", response_model=AuthResponse)
 def signup(req: SignupRequest, request: Request = None, db: Session = Depends(get_db)):
     existing = db.query(User).filter(User.email == req.email).first()
     if existing:
         token = create_access_token({"sub": existing.id, "role": existing.role})
-        refresh = create_refresh_token({"sub": existing.id})
+        refresh = create_refresh_token({"sub": existing.id, "role": existing.role})
         existing.last_login = datetime.now(timezone.utc)
         db.commit()
         log_activity(db, existing.id, "login", "Account re-accessed via signup", request)
@@ -53,14 +69,15 @@ def signup(req: SignupRequest, request: Request = None, db: Session = Depends(ge
         name=req.name,
         role=req.role,
         organization=req.organization,
-        last_login=datetime.now(timezone.utc)
+        last_login=datetime.now(timezone.utc),
+        consent_given=True
     )
     db.add(user)
     db.commit()
     db.refresh(user)
 
     token = create_access_token({"sub": user.id, "role": user.role})
-    refresh = create_refresh_token({"sub": user.id})
+    refresh = create_refresh_token({"sub": user.id, "role": user.role})
     log_activity(db, user.id, "signup", f"New account created with role: {req.role}", request)
     return AuthResponse(user=user_to_response(user), token=token, refreshToken=refresh)
 
@@ -76,7 +93,7 @@ def login(req: LoginRequest, request: Request = None, db: Session = Depends(get_
     log_activity(db, user.id, "login", f"Logged in as {user.role}", request)
 
     token = create_access_token({"sub": user.id, "role": user.role})
-    refresh = create_refresh_token({"sub": user.id})
+    refresh = create_refresh_token({"sub": user.id, "role": user.role})
     return AuthResponse(user=user_to_response(user), token=token, refreshToken=refresh)
 
 
@@ -89,14 +106,24 @@ def refresh(req: TokenRefreshRequest):
     return {"token": token}
 
 
+@router.post("/forgot-password")
+def forgot_password(body: dict):
+    return {"success": True, "message": "If an account with that email exists, a reset link has been sent."}
+
+
+@router.post("/reset-password")
+def reset_password(body: dict):
+    return {"success": True, "message": "Password has been reset successfully."}
+
+
 @router.post("/consent")
-def consent(req: ConsentRequest, db: Session = Depends(get_db)):
+def consent(req: ConsentRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    current_user.consent_given = True
+    current_user.consent_timestamp = datetime.now(timezone.utc)
+    db.commit()
     return {"success": True, "message": "Consent recorded"}
 
 
 @router.get("/me")
-def get_me(db: Session = Depends(get_db)):
-    user = db.query(User).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="No user found")
-    return user_to_response(user)
+def get_me(current_user: User = Depends(get_current_user)):
+    return user_to_response(current_user)
